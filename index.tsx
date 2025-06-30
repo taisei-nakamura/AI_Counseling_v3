@@ -5,8 +5,7 @@
 import { GoogleGenAI, Chat } from '@google/genai';
 import { marked } from 'marked';
 
-// The user-provided API key
-const API_KEY = "AIzaSyCBICEzNVbEYdkpbKlE3j-qk6P2wbhi7o4";
+// The API key is now expected to be in environment variables.
 
 // DOM Elements
 const chatHistory = document.getElementById('chat-history') as HTMLElement;
@@ -39,6 +38,10 @@ async function getAndStreamResponse(message: string) {
     const botMessageElement = displayMessage('bot', '', true);
     setFormDisabled(true);
     try {
+        if (!chat) {
+            // This case is handled by initializeChat, but as a safeguard:
+            throw new Error("Chat not initialized. API key might be missing.");
+        }
         const responseStream = await chat.sendMessageStream({ message });
         let fullResponse = '';
         for await (const chunk of responseStream) {
@@ -49,7 +52,11 @@ async function getAndStreamResponse(message: string) {
         botMessageElement.classList.remove('loading');
     } catch (error) {
         console.error(error);
-        botMessageElement.innerHTML = 'エラーが発生しました。もう一度お試しください。';
+        // Check for specific API key error from Google AI SDK
+        const errorMessage = (error instanceof Error && error.message.includes('API key not valid'))
+            ? 'APIキーが無効です。GitHub Secretsに正しいAPIキーが設定されているか確認してください。'
+            : 'エラーが発生しました。もう一度お試しください。';
+        botMessageElement.innerHTML = errorMessage;
         botMessageElement.classList.remove('loading');
     } finally {
         setFormDisabled(false);
@@ -61,19 +68,31 @@ async function getAndStreamResponse(message: string) {
  * Initializes the chat application.
  */
 async function initializeChat() {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
-    chat = ai.chats.create({
-        model: 'gemini-2.5-flash-preview-04-17',
-        config: {
-            systemInstruction: systemInstruction,
-        },
-    });
+    if (!process.env.API_KEY) {
+        displayMessage('bot', 'APIキーが設定されていません。このアプリケーションをデプロイするリポジトリのGitHub Secretsに `API_KEY` を設定してください。');
+        setFormDisabled(true);
+        return;
+    }
 
-    if (isFirstMessage) {
-        isFirstMessage = false;
-        // The system prompt instructs the bot to ask the first question.
-        // We send an initial message to kick off the conversation.
-        await getAndStreamResponse("こんにちは、カウンセリングを開始します。");
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        chat = ai.chats.create({
+            model: 'gemini-2.5-flash-preview-04-17',
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+
+        if (isFirstMessage) {
+            isFirstMessage = false;
+            // The system prompt instructs the bot to ask the first question.
+            // We send an initial message to kick off the conversation.
+            await getAndStreamResponse("こんにちは、カウンセリングを開始します。");
+        }
+    } catch (error) {
+         console.error(error);
+         displayMessage('bot', `チャットの初期化中にエラーが発生しました。APIキーが正しいか確認してください。`);
+         setFormDisabled(true);
     }
 }
 

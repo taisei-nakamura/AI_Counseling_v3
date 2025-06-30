@@ -1,7 +1,9 @@
 {
   "name": "AI Counselor Chat",
-  "description": "A chat application that provides counseling advice using Gemini.",
-  "requiredEnvironmentVariables": [],
+  "description": "A chat application that provides counseling advice using Gemini. Requires an API_KEY to be set in GitHub Secrets.",
+  "requiredEnvironmentVariables": [
+    "API_KEY"
+  ],
   "requestFramePermissions": [],
   "prompt": ""
 }
